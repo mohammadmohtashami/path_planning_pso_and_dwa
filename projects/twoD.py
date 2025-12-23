@@ -61,25 +61,35 @@ def get_rect_intersection_length(p1, p2, rect):
         # طول برخورد = نسبت زمان در برخورد * طول کل خط
         return (t_max - t_min) * np.linalg.norm(d)
     return 0.0
-
 def calculate_fitness(path_waypoints):
     full_path = np.vstack([start_point, path_waypoints.reshape(-1, 2), target_point])
     total_dist = 0
     total_intersection = 0
+    safety_margin = 1.0  # حاشیه امن مورد نظر شما
     
-    # جریمه خروج از محدوده نقشه
-    out_of_bounds = np.sum(full_path < 0) + np.sum(full_path > map_size)
+    # ۱. جریمه خروج از محدوده با احتساب حاشیه امن
+    # یعنی اگر به فاصله کمتر از 1 واحدی لبه‌های نقشه برسد جریمه شود
+    out_of_bounds = np.sum(full_path < safety_margin) + np.sum(full_path > (map_size - safety_margin))
     
     for i in range(len(full_path) - 1):
         p1, p2 = full_path[i], full_path[i+1]
         total_dist += np.linalg.norm(p1 - p2)
         
         for obs in obstacles:
-            # محاسبه دقیق طول نفوذ در دیوار
-            total_intersection += get_rect_intersection_length(p1, p2, obs)
+            # ۲. بزرگ کردن مجازی مانع برای ایجاد حاشیه امن
+            # به هر طرف مستطیل مقدار safety_margin را اضافه می‌کنیم
+            rx, ry, rw, rh = obs
+            enlarged_obs = (
+                rx - safety_margin, 
+                ry - safety_margin, 
+                rw + 2 * safety_margin, 
+                rh + 2 * safety_margin
+            )
+            
+            # حالا برخورد را با مانع بزرگ‌تر چک می‌کنیم
+            total_intersection += get_rect_intersection_length(p1, p2, enlarged_obs)
 
-    # فرمول نهایی: اولویت مطلق با رفع برخورد است
-    # ضریب 10,000 یعنی: 1 واحد نفوذ در دیوار = 10,000 واحد جریمه
+    # فرمول نهایی جریمه
     penalty = (total_intersection * 10000) + (out_of_bounds * 50000)
     return total_dist + penalty
 
